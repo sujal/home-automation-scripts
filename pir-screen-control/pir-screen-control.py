@@ -14,8 +14,8 @@ import signal
 import paho.mqtt.publish as mqttpublish
 import vcgencmd
 
+from configparser import ConfigParser 
 from time import localtime, strftime
-from ConfigParser import SafeConfigParser
 from vcgencmd import Vcgencmd
 
 
@@ -108,6 +108,7 @@ def motion_detected(x):
 def exit_gracefully(x,y):
     logging.info('Exiting gracefully...')
     GPIO.cleanup()
+    exit(0)
 
 signal.signal(signal.SIGINT, exit_gracefully)
 signal.signal(signal.SIGTERM, exit_gracefully)
@@ -123,7 +124,7 @@ motion_active = False
 last_motion_time = time.time()
 start_motion_time = last_motion_time
 
-config = SafeConfigParser()
+config = ConfigParser()
 config.read(sys.argv[1])
 verbose = config.getboolean('main', 'VERBOSE')
 sensor_pin = config.getint('main', 'SENSOR_PIN')
