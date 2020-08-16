@@ -47,7 +47,8 @@ def mqtt(msg):
             'message': msg,
             'last_motion_time': last_motion_time,
             'start_motion_time': start_motion_time,
-            'motion_active': motion_active
+            'motion_active': motion_active,
+            'last_heartbeat_time': last_heartbeat_time
         }
         # this is the basic msg
         msgs = [{'topic': mqtt_topic, 'payload': json.dumps(msg_body), 'qos': 0, 'retain': True}]
@@ -80,7 +81,8 @@ def heartbeat():
     global screen_active_timelimit
     
     current_time = time.time()
-    logging.info("HB at {}".format(current_time))
+    last_heartbeat_time = current_time
+    logging.debug("HB at {}".format(current_time))
 
     # if we're currenting in a motion state, check if we're over the time linit
     # and shutoff the screen if so.
@@ -123,6 +125,7 @@ if len(sys.argv) == 1:
 motion_active = False
 last_motion_time = time.time()
 start_motion_time = last_motion_time
+last_heartbeat_time = last_motion_time
 
 config = ConfigParser()
 config.read(sys.argv[1])
