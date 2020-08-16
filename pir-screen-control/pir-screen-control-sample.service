@@ -1,0 +1,14 @@
+[Unit]
+Description=Screen Control Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -u ./pir-screen-control.py dashboard-config.ini
+WorkingDirectory=/home/pi/pir-screen-control
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
