@@ -1,6 +1,8 @@
 #
 # Code initially taken from these projects:
 #   https://www.hackster.io/hardikrathod/pir-motion-sensor-with-raspberry-pi-415c04
+#   https://github.com/Shmoopty/rpi-appliance-monitor
+# . https://github.com/sujal/rpi-appliance-monitor
 # 
 
 import sys
