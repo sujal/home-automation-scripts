@@ -13,6 +13,7 @@ import RPi.GPIO as GPIO
 import signal
 import paho.mqtt.publish as mqttpublish
 import vcgencmd
+import json
 
 from configparser import ConfigParser 
 from time import localtime, strftime
@@ -53,11 +54,66 @@ def mqtt(msg):
         # this is the basic msg
         msgs = [{'topic': mqtt_topic, 'payload': json.dumps(msg_body), 'qos': 0, 'retain': True}]
 
+        if mqtt_homeassistant_autodiscovery:
+            msgs.append({'topic': mqtt_homeassistant_state_topic, 'payload': ('ON' if motion_active else 'OFF') , 'qos': 0, 'retain': True})
+            msgs.append({'topic': mqtt_homeassistant_availability_topic, 'payload': 'online', 'qos': 0, 'retain': True})
+
         mqtt_send_messages(msgs)
 
     except (KeyboardInterrupt, SystemExit):
         raise
     except:
+        logging.info('got an exception...')
+        pass
+
+def mqtt_register_with_homeassistant():
+    try:
+
+        global mqtt_homeassistant_state_topic
+        global mqtt_homeassistant_availability_topic
+
+        device_class = 'binary_sensor'
+
+        device_name = 'PIR Screen Control: ' + mqtt_clientid
+        device_unique_id = 'pir-sc-' + mqtt_clientid
+        entity_name = 'PIR Screen Control State: ' + mqtt_clientid
+        entity_unique_id = device_unique_id + '-state'
+        
+        mqtt_base_topic = mqtt_homeassistant_discovery_prefix + '/' + device_class + '/' + entity_unique_id 
+        mqtt_discovery_topic = mqtt_base_topic + '/config'
+
+        mqtt_homeassistant_availability_topic = mqtt_base_topic + '/avty'
+        mqtt_homeassistant_state_topic = mqtt_base_topic + '/stat'
+
+        msgs = []
+
+        config_payload = {
+            '~': mqtt_base_topic,
+            'name': entity_name,
+            'dev_cla': 'power',
+            'stat_t': '~/stat',
+            'avty_t': '~/avty',
+            'pl_on': 'ON',
+            'pl_off': 'OFF',
+            'unique_id': entity_unique_id,
+            'dev': {
+                'identifiers': [device_unique_id],
+                'name': device_name
+                }
+            }
+
+        logging.debug('homeassistant autodiscovery topic: ' + mqtt_discovery_topic)
+        logging.debug('homeassistant autodiscovery payload: ' + json.dumps(config_payload))
+
+        msgs.append({'topic': mqtt_discovery_topic, 'payload': json.dumps(config_payload), 'qos': 0, 'retain': True})
+        msgs.append({'topic': mqtt_homeassistant_availability_topic, 'payload': 'online', 'qos': 0, 'retain': True})
+    
+        mqtt_send_messages(msgs)
+
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except:
+        logging.info('Exception in HA config setup')
         pass
 
 def mqtt_send_messages(msgs):
@@ -69,11 +125,15 @@ def mqtt_send_messages(msgs):
         if len(mqtt_username) > 0:
             mqtt_auth = { 'username': mqtt_username, 'password': mqtt_password }        
 
+        logging.debug('auth is set')
+
         mqttpublish.multiple(msgs, hostname=mqtt_hostname, port=mqtt_port, client_id=mqtt_clientid,
         keepalive=60, will=None, auth=mqtt_auth, tls=None)
     except (KeyboardInterrupt, SystemExit):
         raise
-    except:
+    except Exception as e:
+        logging.error('Error sending messages')
+        logging.error(e, exc_info=True)
         pass
 
 def heartbeat():
@@ -109,6 +169,10 @@ def motion_detected(x):
 
 def exit_gracefully(x,y):
     logging.info('Exiting gracefully...')
+    if mqtt_homeassistant_autodiscovery:
+        mqtt_send_messages([{'topic': mqtt_homeassistant_availability_topic,
+                            'payload': 'offline'
+                            }])
     GPIO.cleanup()
     exit(0)
 
@@ -141,9 +205,22 @@ mqtt_topic = config.get('mqtt', 'mqtt_topic')
 mqtt_username = config.get('mqtt', 'mqtt_username')
 mqtt_password = config.get('mqtt', 'mqtt_password')
 mqtt_clientid = config.get('mqtt', 'mqtt_clientid')
+mqtt_homeassistant_autodiscovery = config.getboolean('mqtt', 'mqtt_homeassistant_autodiscovery')
+mqtt_homeassistant_state_topic = mqtt_topic + '/stat'
+mqtt_homeassistant_availability_topic = mqtt_topic + '/avty'
+mqtt_homeassistant_discovery_prefix = config.get('mqtt', 'mqtt_homeassistant_discovery_prefix')
+if len(mqtt_homeassistant_discovery_prefix) == 0:
+    mqtt_homeassistant_discovery_prefix = 'homeassistant'
+
+if len(mqtt_port) > 0:
+    mqtt_port = int(mqtt_port)
 
 if verbose:
     logging.getLogger().setLevel(logging.DEBUG)
+
+if mqtt_homeassistant_autodiscovery:
+    logging.info('Starting HomeAssistant AutoDiscovery')
+    mqtt_register_with_homeassistant()
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
