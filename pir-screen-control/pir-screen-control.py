@@ -20,6 +20,20 @@ from time import localtime, strftime
 from vcgencmd import Vcgencmd
 
 
+def initialize_status():
+    global motion_active
+    global start_motion_time
+    global last_motion_time
+
+    vcgm = Vcgencmd()
+    output = vcgm.display_power_state(screen_id)
+    if output == 'on':
+        start_motion_time = last_motion_time = time.time()
+        motion_active = True
+
+    message = 'Initializing screen state as {}'.format(motion_active)
+    notify_screen_state(message)
+
 def turn_off_screen():
     vcgm = Vcgencmd()
     output = vcgm.display_power_off(screen_id)
@@ -139,6 +153,7 @@ def mqtt_send_messages(msgs):
 def heartbeat():
     global motion_active
     global screen_active_timelimit
+    global is_running
     
     current_time = time.time()
     last_heartbeat_time = current_time
@@ -151,7 +166,8 @@ def heartbeat():
         motion_active = False
         turn_off_screen()
 
-    threading.Timer(1, heartbeat).start()
+    if is_running:
+        threading.Timer(1, heartbeat).start()
 
 def motion_detected(x):
     global motion_active
@@ -168,13 +184,19 @@ def motion_detected(x):
         turn_on_screen()
 
 def exit_gracefully(x,y):
+    global is_running
+
     logging.info('Exiting gracefully...')
+
+    is_running = False
+    
     if mqtt_homeassistant_autodiscovery:
         mqtt_send_messages([{'topic': mqtt_homeassistant_availability_topic,
                             'payload': 'offline'
                             }])
     GPIO.cleanup()
-    exit(0)
+    time.sleep(5) # give it 5 seconds to login, send the message
+    sys.exit(0)
 
 signal.signal(signal.SIGINT, exit_gracefully)
 signal.signal(signal.SIGTERM, exit_gracefully)
@@ -185,7 +207,7 @@ if len(sys.argv) == 1:
     logging.critical("No config file specified")
     sys.exit(1)
 
-
+is_running = True
 motion_active = False
 last_motion_time = time.time()
 start_motion_time = last_motion_time
@@ -221,6 +243,7 @@ if verbose:
 if mqtt_homeassistant_autodiscovery:
     logging.info('Starting HomeAssistant AutoDiscovery')
     mqtt_register_with_homeassistant()
+    initialize_status()
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
