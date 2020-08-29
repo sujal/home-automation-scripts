@@ -243,7 +243,8 @@ if verbose:
 if mqtt_homeassistant_autodiscovery:
     logging.info('Starting HomeAssistant AutoDiscovery')
     mqtt_register_with_homeassistant()
-    initialize_status()
+
+initialize_status()
 
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
